@@ -1051,9 +1051,9 @@ def _show_config_dialog():
     """Show the MicroSMT settings dialog.  Called from Edit > Plugins."""
     global PATCH_PREDICATES
     try:
-        from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
+        from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
                                      QCheckBox, QPushButton, QLabel, QGroupBox)
-        from PyQt5.QtCore import Qt
+        from PySide6.QtCore import Qt
     except ImportError:
         result = idaapi.ask_yn(1 if PATCH_PREDICATES else 0,
                                "Patch opaque predicates?")
