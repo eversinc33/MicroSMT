@@ -27,6 +27,8 @@ ALWAYS_TAKEN = "Always taken/true   [opaque predicate]"
 NEVER_TAKEN  = "Never taken/false   [opaque predicate]"
 REAL_BRANCH  = "Real branch/cond    [condition-dependent]"
 INCONCLUSIVE = "Inconclusive        [unsupported / unknown]"
+KIND_JCC = "jcc"
+KIND_SETCC = "setcc"
 
 # ---------------------------------------------------------------------------
 
@@ -939,19 +941,16 @@ def _patch_setcc(ea, cls):
 
 # ---------------------------------------------------------------------------
 
-def analyze(ea=None):
+def _decode_insn_type(ea):
     """
-    Analyze the instruction at ea (or IDA cursor if None).
-    """
-    if ea is None:
-        ea = idc.here()
+    Decode the instruction at ea and classify it.
 
-    # get instruction under cursor and get its type
+    Returns (insn, mnem, is_cond_jmp, is_setcc) on success,
+    or (None, err_string, False, False) on failure.
+    """
     insn = idaapi.insn_t()
     if not idaapi.decode_insn(insn, ea):
-        err = f"Cannot decode instruction at {ea:#x}"
-        _print_predicate_info(ea, "", 0, {}, False, False, INCONCLUSIVE, error=err)
-        return INCONCLUSIVE, err
+        return None, f"Cannot decode instruction at {ea:#x}", False, False
 
     mnem = idc.print_insn_mnem(ea).lower()
     is_cond_jmp = (
@@ -962,16 +961,16 @@ def analyze(ea=None):
         insn.itype in _SETCC_ITYPES
         or mnem.startswith('set')
     )
+    return insn, mnem, is_cond_jmp, is_setcc
 
-    if not is_cond_jmp and not is_setcc:
-        err = f"Not a conditional branch or SETcc: '{mnem}' @ {ea:#x}"
-        _print_predicate_info(ea, "", 0, {}, False, False, INCONCLUSIVE, error=err)
-        return INCONCLUSIVE, err
 
-    # Locate the containing function or derive a range for shellcode
+def _build_mba_ranges(ea):
+    """
+    Locate the containing function or derive a block range for shellcode.
+
+    Returns (mbr, hf) on success, or (None, err_string) on failure.
+    """
     func = idaapi.get_func(ea)
-
-    # Build mba_ranges_t
     try:
         hf = hr.hexrays_failure_t()
         if func is not None:
@@ -980,13 +979,37 @@ def analyze(ea=None):
             # No function defined (e.g. shellcode): lift the containing basic block only
             blk_start, blk_end = _find_block_range(ea)
             if blk_start is None:
-                err = (f"No function at {ea:#x} and cannot determine block range — try defining a function first (P key in IDA)")
-                _print_predicate_info(ea, "", 0, {}, False, False, INCONCLUSIVE, error=err)
-                return INCONCLUSIVE, err
+                return None, (f"No function at {ea:#x} and cannot determine block range — try defining a function first (P key in IDA)")
             mbr = hr.mba_ranges_t()
             mbr.ranges.push_back(idaapi.range_t(blk_start, blk_end))
     except Exception as exc:
-        err = f"mba_ranges setup raised: {exc}"
+        return None, f"mba_ranges setup raised: {exc}"
+    return mbr, hf
+
+
+def analyze(ea=None):
+    """
+    Analyze the instruction at ea (or IDA cursor if None).
+    """
+    if ea is None:
+        ea = idc.here()
+
+    # get instruction under cursor and classify its type
+    insn, mnem, is_cond_jmp, is_setcc = _decode_insn_type(ea)
+    if insn is None:
+        err = mnem  # mnem holds the error string on failure
+        _print_predicate_info(ea, "", 0, {}, False, False, INCONCLUSIVE, error=err)
+        return INCONCLUSIVE, err
+
+    if not is_cond_jmp and not is_setcc:
+        err = f"Not a conditional branch or SETcc: '{mnem}' @ {ea:#x}"
+        _print_predicate_info(ea, "", 0, {}, False, False, INCONCLUSIVE, error=err)
+        return INCONCLUSIVE, err
+
+    # locate function or derive shellcode block range, build mba_ranges_t
+    mbr, hf = _build_mba_ranges(ea)
+    if mbr is None:
+        err = hf  # hf holds the error string on failure
         _print_predicate_info(ea, "", 0, {}, False, False, INCONCLUSIVE, error=err)
         return INCONCLUSIVE, err
 
@@ -1007,10 +1030,10 @@ def analyze(ea=None):
 
         if is_setcc:
             block, target_insn = _find_setcc_insn(mba, ea)
-            kind = "setcc"
+            kind = KIND_SETCC
         else:
             block, target_insn = _find_jcnd_block(mba, ea)
-            kind = "jcc"
+            kind = KIND_JCC
 
         if target_insn is not None:
             break # found
@@ -1024,10 +1047,14 @@ def analyze(ea=None):
     # Lift condition to z3 
     lifter = Z3Lifter(mba, block, target_insn)
     try:
-        if kind == "setcc":
+        if kind == KIND_SETCC:
             z3_cond = lifter.lift_setcc_condition(target_insn)
-        else:
+        elif kind == KIND_JCC:
             z3_cond = lifter.lift_condition()
+        else:
+            err = f"Unexpected instruction kind: {kind}\n{traceback.format_exc()}"
+            _print_predicate_info(ea, "", 0, {}, False, False, INCONCLUSIVE, error=err)
+            return INCONCLUSIVE, err
     except LiftError as exc:
         err = str(exc)
         _print_predicate_info(ea, f"<lift error: {err}>", 0, {}, False, False, INCONCLUSIVE, error=err)
@@ -1062,9 +1089,9 @@ def analyze(ea=None):
 
     # patch
     if PATCH_PREDICATES and cls in (ALWAYS_TAKEN, NEVER_TAKEN):
-        if kind == "setcc":
+        if kind == KIND_SETCC:
             _patch_setcc(ea, cls)
-        else:
+        elif kind == KIND_JCC:
             _patch_branch(ea, cls)
 
     return cls, None
