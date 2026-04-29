@@ -15,6 +15,10 @@ There are some limitations regarding opaque predicates that can be solved - nota
 
 For these types, I recommend full symbolic execution.
 
+### Usage
+
+Point the cursor over a `jcc` or `setcc` instruction, press `Alt+p` and MicroSMT will decide if the condition is an opaque predicate, and if yes, solve it. If you tick the box to patch in the plugin settings menu, MicroSMT will additionally patch accordingly (e.g. `nop` or `jmp` a `jcc` or replace a `setcc` with an assignment to 0 or 1).
+
 ### Examples
 
 ```
