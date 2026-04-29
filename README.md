@@ -13,7 +13,11 @@ There are some limitations regarding opaque predicates that can be solved - nota
 * Predicates that rely on external API calls and their results
 * Predicates that go over several basic blocks
 
-For these types, I recommend full symbolic execution.
+For these types, I recommend full symbolic execution or similar.
+
+### Installation
+
+Copy `MicroSMT.py` into your IDA plugins folder (e.g. `~/.idapro/plugins`). Make sure that `z3` is installed via `pip`.
 
 ### Usage
 
