@@ -126,6 +126,31 @@ def expr_to_text(expr):
     if decl == _z3.Z3_OP_SIGN_EXT:
         return args[0]
 
+    # BitVec comparisons
+    if decl == _z3.Z3_OP_ULT:
+        return f"({args[0]} < {args[1]})"
+
+    if decl == _z3.Z3_OP_ULEQ:
+        return f"({args[0]} <= {args[1]})"
+
+    if decl == _z3.Z3_OP_UGT:
+        return f"({args[0]} > {args[1]})"
+
+    if decl == _z3.Z3_OP_UGEQ:
+        return f"({args[0]} >= {args[1]})"
+
+    if decl == _z3.Z3_OP_SLT:
+        return f"({args[0]} <s {args[1]})"
+
+    if decl == _z3.Z3_OP_SLEQ:
+        return f"({args[0]} <=s {args[1]})"
+
+    if decl == _z3.Z3_OP_SGT:
+        return f"({args[0]} >s {args[1]})"
+
+    if decl == _z3.Z3_OP_SGEQ:
+        return f"({args[0]} >=s {args[1]})"
+
     raise RuntimeError(f"Unsupported op: {expr}")
 
 def bv_val(val, bits):
@@ -1105,7 +1130,7 @@ class _AnalyzeAction(idaapi.action_handler_t):
 class _MicroSMTPlugin(idaapi.plugin_t):
     flags         = idaapi.PLUGIN_PROC
     comment       = "Opaque Predicate Analyzer"
-    help          = "Detect opaque predicates via Hex-Rays microcode + z3  (Alt-P to analyze)"
+    help          = "Detect opaque predicates via Hex-Rays microcode + z3  (Alt-M to analyze)"
     wanted_name   = "MicroSMT"
     wanted_hotkey = ""         
 
@@ -1122,7 +1147,7 @@ class _MicroSMTPlugin(idaapi.plugin_t):
             self._ACTION_ID,
             "MicroSMT: Analyze branch",
             _AnalyzeAction(),
-            "Alt-P",
+            "Alt-M",
             "Analyze conditional branch / SETcc at cursor for opaque predicates",
             -1,
         )
@@ -1133,7 +1158,7 @@ class _MicroSMTPlugin(idaapi.plugin_t):
             idaapi.SETMENU_APP,
         )
 
-        idaapi.msg("[MicroSMT] Loaded — press Alt-P on a conditional "
+        idaapi.msg("[MicroSMT] Loaded — press Alt-M on a conditional "
                    "branch or SETcc to analyze.  Click the plugin entry to configure.\n")
         return idaapi.PLUGIN_KEEP
 
