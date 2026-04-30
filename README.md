@@ -15,6 +15,8 @@ There are some limitations regarding opaque predicates that can be solved - nota
 
 For these types, I recommend full symbolic execution or similar.
 
+*MicroSMT was tested on IDA Pro 9.2*
+
 ### Installation
 
 Copy `MicroSMT.py` into your IDA plugins folder (e.g. `~/.idapro/plugins`). Make sure that `z3` is installed via `pip`.
